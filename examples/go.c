@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <math.h>
 #include <unistd.h>
+#include <sys/select.h> 
 
 int inverted = 1;
 int noi = 1;
