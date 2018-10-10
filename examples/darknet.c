@@ -3,7 +3,6 @@
 #include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <sys/select.h> 
 
 extern void predict_classifier(char *datacfg, char *cfgfile, char *weightfile, char *filename, int top);
 extern void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh, float hier_thresh, char *outfile, int fullscreen);
