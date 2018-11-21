@@ -1,6 +1,10 @@
+import threading
+threading.stack_size(4*80*1024)
+
 from ctypes import *
 import math
 import random
+import logging
 
 from flask import Flask, render_template, request
 from flask.json import JSONEncoder
@@ -11,6 +15,31 @@ from flask_uploads import UploadSet, configure_uploads, IMAGES
 
 import numpy as np
 from PIL import Image, ImageDraw
+
+UPLOAD_FOLDER = '/darknet/uploads'
+STATIC_IMAGES = '/darknet/data'
+STATIC_IMAGES_RESIZED = '/darknet/data/resized'
+ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg', 'gif'])
+
+from flask import Flask
+app = Flask(__name__)
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['UPLOADED_PHOTOS_DEST'] = STATIC_IMAGES
+
+photos = UploadSet('photos', IMAGES)
+configure_uploads(app, photos)
+
+class MyEncoder(JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        else:
+            return JSONEncoder.default(self, obj)
 
 
 def sample(probs):
@@ -152,11 +181,58 @@ def detect(net, meta, image, thresh=.5, hier_thresh=.5, nms=.45):
     free_image(im)
     free_detections(dets, num)
     return res
- 
-net = load_net("cfg/yolov3-sg.cfg", "yolov3-laptop_1300.weights", 0)
-meta = load_meta("cfg/laptop.cfg")
-# r = detect(net, meta, "data/dog.jpg")
-# print r
+
+net = load_net("/darknet/cfg/yolov3-laptop.cfg", "yolov3-laptop_1300.weights", 0)
+meta = load_meta("/darknet/cfg/laptop.data")
+
+@app.route('/', methods=['GET'])
+def index():
+    logging.warning("Default")
+    return 'Flask Dockerized'
+
+@app.route('/prices', methods=['GET'])
+def get_prices_methods():
+    prices = {'ipad':450,'smartphone':250,'camera':350, 'iphone':300, 'macbook':800, 'notebook':500, 'headphones':100 }
+    return jsonify(prices)
+
+@app.route('/detect', methods=['POST'])
+def detect_method():
+    logging.warning("Start: try to detect")
+    # r = detect(net, meta, "/darknet/data/dog.jpg")
+    # print r
+    print('detect method')
+    if request.method == 'POST' and 'photo' in request.files:
+        logging.warning("Do detect")
+        file = request.files['photo']
+        logging.warning("Do detect")
+        # filename = photos.save(request.files['photo'])
+        filename = file.filename
+        filePath = STATIC_IMAGES + '/' + filename
+        file.save(filename);
+        logging.warning("Save file")
+
+        logging.warning(filename)
+        filePathResized = STATIC_IMAGES_RESIZED + '/' + filename
+
+        logging.warning(filePath)
+        img = Image.open(file)
+
+        new_width  = 415
+        new_height = new_width * img.height / img.width
+        rect = { 'img_width': img.width, 'img_heigth': img.height, 'detect_width': new_width, 'detect_height': new_height }
+
+        img_resized = img.resize(size=(new_width, new_height))
+        img_resized.save(filePathResized, 'JPEG')
+        img.close()
+        img_resized.close()
+        logging.warning(filePathResized)
+        result = detect(net, meta, filePathResized)
+        logging.warning('result')
+        logging.warning(result)
+        json_result = { 'sizes': rect, 'objects': result}
+        return jsonify(json_result)
+    return 'Wrong params'
 
 if __name__ == '__main__':
-     app.run(port='5002')
+     logging.warning("Start service!")
+     app.run(host="0.0.0.0", port=8080)
